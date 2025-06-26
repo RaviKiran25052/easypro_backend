@@ -23,7 +23,8 @@ const createAdminIfNotExists = async () => {
 			email: process.env.ADMIN_EMAIL,
 			profilePic: 'https://img.freepik.com/premium-vector/shopping-human-simple-gold-icon-apps-websites_599062-10425.jpg',
 			gender: 'male',
-			password: process.env.ADMIN_PASSWORD
+			password: process.env.ADMIN_PASSWORD,
+			role: 'admin'
 		});
 
 		// Save to database

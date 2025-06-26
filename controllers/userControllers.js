@@ -164,7 +164,8 @@ exports.login = async (req, res) => {
 			data: {
 				user: userResponse,
 				token
-			}
+			},
+			role: userResponse.role || 'user'
 		});
 
 	} catch (error) {
