@@ -67,9 +67,14 @@ const writerSchema = new mongoose.Schema({
 		min: 0,
 		max: 5
 	},
+	maxOrders: {
+		type: Number,
+		default: 5,
+		min: 1
+	},
 	availableOn: {
 		type: Date,
-		default: Date.now
+		default: null
 	}
 }, {
 	timestamps: true

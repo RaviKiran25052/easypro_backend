@@ -135,7 +135,7 @@ exports.login = async (req, res) => {
 		const user = await User.findOne(query);
 
 		if (!user) {
-			return res.status(401).json({
+			return res.status(200).json({
 				success: false,
 				message: 'Invalid credentials'
 			});

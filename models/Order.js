@@ -1,12 +1,16 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-	subject: {
+	type: {
 		type: String,
-		required: true,
-		trim: true
+		enum: ['writing', 'editing', 'technical'],
+		required: true
 	},
 	paperType: {
+		type: String,
+		trim: true
+	},
+	subject: {
 		type: String,
 		required: true,
 		trim: true
@@ -20,15 +24,8 @@ const orderSchema = new mongoose.Schema({
 		type: String,
 		trim: true
 	},
-	type: {
-		type: String,
-		enum: ['writing', 'editing', 'technical'],
-		required: true
-	},
-	status: {
-		type: String,
-		enum: ['completed', 'pending', 'unassigned', 'cancel', 'expired'],
-		default: 'unassigned'
+	slides: {
+		type: Number
 	},
 	files: [{
 		type: String
@@ -49,7 +46,12 @@ const orderSchema = new mongoose.Schema({
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'User',
 		required: true
-	}
+	},
+	status: {
+		type: String,
+		enum: ['completed', 'pending', 'unassigned', 'cancel', 'expired'],
+		default: 'unassigned'
+	},
 }, {
 	timestamps: true
 });

@@ -11,8 +11,14 @@ const resourceSchema = new mongoose.Schema({
 		required: true,
 		trim: true
 	},
-	subject: {
+	description: {
 		type: String,
+		required: true,
+		trim: true
+	},
+	type: {
+		type: String,
+		enum: ['image', 'video', 'pdf', 'presentation', 'other'],
 		required: true,
 		trim: true
 	},
