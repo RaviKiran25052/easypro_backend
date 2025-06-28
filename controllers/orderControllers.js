@@ -1,3 +1,4 @@
+const { uploadMultipleFiles } = require('../config/cloudinary');
 const Order = require('../models/Order');
 
 exports.createOrder = async (req, res) => {
@@ -13,19 +14,17 @@ exports.createOrder = async (req, res) => {
 			user: userId
 		};
 
-		// Validate required fields based on order type
-		const validationResult = validateOrderByType(type, orderRequestData);
-		if (!validationResult.isValid) {
-			return res.status(400).json({
-				success: false,
-				message: 'Validation failed',
-				errors: validationResult.errors
-			});
-		}
-
 		// Create order object based on type
 		const orderData = buildOrderData(type, orderRequestData);
 
+		if (req.files) {
+			try {
+				orderData.files = await uploadMultipleFiles(req.files.files, 'easyPro/files');				
+			} catch (uploadError) {
+				res.status(500);
+				throw new Error('Image upload failed');
+			}
+		}
 		// Create and save order
 		const order = new Order(orderData);
 		await order.save();
@@ -47,68 +46,6 @@ exports.createOrder = async (req, res) => {
 			error: error.message
 		});
 	}
-};
-
-// Validate order data based on type
-const validateOrderByType = (type, data) => {
-	const errors = [];
-
-	// Common validations
-	if (!type || !['writing', 'editing', 'technical'].includes(type)) {
-		errors.push('Valid order type is required (writing, editing, technical)');
-	}
-
-	if (!data.subject || data.subject.trim() === '') {
-		errors.push('Subject is required');
-	}
-
-	if (!data.deadline) {
-		errors.push('Deadline is required');
-	} else {
-		const deadlineDate = new Date(data.deadline);
-		if (deadlineDate <= new Date()) {
-			errors.push('Deadline must be in the future');
-		}
-	}
-
-	if (!data.user) {
-		errors.push('User ID is required');
-	}
-
-	// Type-specific validations
-	switch (type) {
-		case 'writing':
-			if (!data.paperType || data.paperType.trim() === '') {
-				errors.push('Paper type is required for writing orders');
-			}
-			if (!data.pageCount || data.pageCount < 1) {
-				errors.push('Page count is required and must be at least 1 for writing orders');
-			}
-			break;
-
-		case 'editing':
-			if (!data.files || !Array.isArray(data.files) || data.files.length === 0) {
-				errors.push('Files are required for editing orders');
-			}
-			if (!data.pageCount || data.pageCount < 1) {
-				errors.push('Page count is required and must be at least 1 for editing orders');
-			}
-			break;
-
-		case 'technical':
-			if (!data.software || data.software.trim() === '') {
-				errors.push('Software specification is required for technical orders');
-			}
-			if (!data.writerId) {
-				errors.push('Writer selection is required for technical orders');
-			}
-			break;
-	}
-
-	return {
-		isValid: errors.length === 0,
-		errors
-	};
 };
 
 // Build order data object based on type
@@ -142,7 +79,7 @@ const buildOrderData = (type, data) => {
 			return {
 				...baseOrder,
 				software: data.software.trim(),
-				writer: data.writerId,
+				writer: data.selectedWriter,
 				status: 'pending',
 				files: Array.isArray(data.files) ? data.files : [] // Optional for technical
 			};
