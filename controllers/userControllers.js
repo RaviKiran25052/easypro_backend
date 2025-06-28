@@ -65,8 +65,10 @@ exports.register = async (req, res) => {
 			try {
 				userData.profilePic = await uploadToCloudinary(req.file, 'easyPro/images');
 			} catch (uploadError) {
-				res.status(500);
-				throw new Error('Image upload failed');
+				res.status(500).json({
+					success: false,
+					message: 'Failed to upload profile picture'
+				});
 			}
 		}
 

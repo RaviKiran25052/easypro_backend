@@ -15,7 +15,7 @@ const writerSchema = new mongoose.Schema({
 	},
 	profilePic: {
 		type: String,
-		default: ''
+		default: 'https://thumbs.dreamstime.com/b/user-profile-icon-flat-vector-illustration-design-user-profile-icon-flat-vector-illustration-design-isolated-white-background-158416637.jpg'
 	},
 	skills: [{
 		skill: {
