@@ -2,18 +2,72 @@ const Writer = require('../models/Writer');
 const { uploadToCloudinary } = require('../config/cloudinary');
 
 exports.getAllWriters = async (req, res) => {
-	const writers = await Writer.find({}).sort({ createdAt: -1 });
-	if (!writers || writers.length === 0) {
-		return res.status(200).json({
+	try {
+		const { subject, deadline } = req.query;
+		const query = {};
+
+		// Handle subject filtering
+		if (subject) {
+			query.$or = [
+				{ skills: { $elemMatch: { skill: new RegExp(subject, 'i') } } },
+				{ familiarWith: { $in: [new RegExp(subject, 'i')] } }
+			];
+		}
+
+		// Handle deadline filtering
+		if (deadline) {
+			const deadlineDate = new Date(deadline);
+
+			// Check if deadline is valid
+			if (isNaN(deadlineDate.getTime())) {
+				return res.status(400).json({
+					success: false,
+					message: 'Invalid deadline format'
+				});
+			}
+
+			// Check if deadline is in the past
+			if (deadlineDate < new Date()) {
+				return res.status(400).json({
+					success: false,
+					message: 'Deadline cannot be in the past'
+				});
+			}
+
+			// Find writers available on or before the deadline, or those with no availability restriction
+			query.$and = query.$and || [];
+			query.$and.push({
+				$or: [
+					{ availableOn: { $lte: deadlineDate } },
+					{ availableOn: { $exists: false } },
+					{ availableOn: null }
+				]
+			});
+		}
+
+		const writers = await Writer.find(query).sort({ createdAt: -1 });
+
+		if (!writers || writers.length === 0) {
+			return res.status(200).json({
+				success: true,
+				message: 'No writers found',
+				data: []
+			});
+		}
+
+		res.status(200).json({
+			success: true,
+			data: writers
+		});
+
+	} catch (error) {
+		console.error('Error fetching writers:', error);
+		res.status(500).json({
 			success: false,
-			message: 'No writers found'
+			message: 'Internal server error'
 		});
 	}
-	res.status(200).json({
-		success: true,
-		data: writers
-	});
-}
+};
 
 exports.getWriterById = async (req, res) => {
 	const { id } = req.params;
@@ -145,13 +199,13 @@ exports.updateWriter = async (req, res) => {
 		}
 
 		await writer.save();
-		
+
 		res.status(200).json({
 			success: true,
 			message: 'Writer updated successfully',
 			data: writer
 		});
-		
+
 	} catch (error) {
 		console.error('Error updating writer:', error);
 		res.status(500).json({
