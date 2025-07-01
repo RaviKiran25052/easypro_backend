@@ -116,6 +116,7 @@ exports.getUserOrders = async (req, res) => {
 		// Fetch review details for completed orders
 		const ordersWithReviews = await Promise.all(
 			orders.map(async (order) => {
+				await order.checkAndExpire();
 				const orderObj = order.toObject();
 
 				// Only fetch review data if order status is completed
@@ -173,6 +174,8 @@ exports.getOrderById = async (req, res) => {
 			});
 		}
 
+		await order.checkAndExpire();
+		
 		res.json({
 			success: true,
 			data: order

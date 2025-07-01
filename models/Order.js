@@ -62,5 +62,21 @@ const orderSchema = new mongoose.Schema({
 	timestamps: true
 });
 
+orderSchema.methods.checkAndExpire = async function () {
+	const now = new Date();
+
+	// Don't update if already completed, cancelled, or expired
+	if (
+		this.deadline < now &&
+		!['completed', 'cancelled', 'expired'].includes(this.status.state)
+	) {
+		this.status.state = 'expired';
+		this.status.reason = 'Deadline passed';
+		await this.save();
+	}
+
+	return this;
+};
+
 const Order = mongoose.model('Order', orderSchema);
 module.exports = Order;
