@@ -17,7 +17,6 @@ const orderSchema = new mongoose.Schema({
 	},
 	pageCount: {
 		type: Number,
-		required: true,
 		min: 1
 	},
 	software: {
@@ -38,6 +37,18 @@ const orderSchema = new mongoose.Schema({
 		type: Date,
 		required: true
 	},
+	status: {
+		state: {
+			type: String,
+			enum: ['assigned', 'unassigned', 'pending', 'completed', 'cancelled', 'expired'],
+			default: 'unassigned'
+		},
+		reason: {
+			type: String,
+			default: '',
+			trim: true
+		}
+	},
 	writer: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'Writer'
@@ -46,12 +57,7 @@ const orderSchema = new mongoose.Schema({
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'User',
 		required: true
-	},
-	status: {
-		type: String,
-		enum: ['completed', 'pending', 'unassigned', 'cancel', 'expired'],
-		default: 'unassigned'
-	},
+	}
 }, {
 	timestamps: true
 });

@@ -1,5 +1,6 @@
 const { uploadMultipleFiles } = require('../config/cloudinary');
 const Order = require('../models/Order');
+const Review = require('../models/Review');
 
 exports.createOrder = async (req, res) => {
 	try {
@@ -19,7 +20,7 @@ exports.createOrder = async (req, res) => {
 
 		if (req.files) {
 			try {
-				orderData.files = await uploadMultipleFiles(req.files.files, 'easyPro/files');				
+				orderData.files = await uploadMultipleFiles(req.files.files, 'easyPro/files');
 			} catch (uploadError) {
 				res.status(500);
 				throw new Error('Image upload failed');
@@ -52,13 +53,12 @@ exports.createOrder = async (req, res) => {
 const buildOrderData = (type, data) => {
 	const baseOrder = {
 		type,
-		subject: data.subject.trim(),
-		deadline: new Date(data.deadline),
+		subject: data.subject?.trim(),
+		deadline: data.deadline ? new Date(data.deadline) : undefined,
 		user: data.user,
-		instruction: data.instruction ? data.instruction.trim() : '',
+		instruction: data.instruction ? data.instruction?.trim() : '',
 		files: Array.isArray(data.files) ? data.files : []
-	};
-
+	}
 	switch (type) {
 		case 'writing':
 			return {
@@ -78,9 +78,12 @@ const buildOrderData = (type, data) => {
 		case 'technical':
 			return {
 				...baseOrder,
-				software: data.software.trim(),
+				software: data.software?.trim(),
 				writer: data.selectedWriter,
-				status: 'pending',
+				status: data.status || {
+					state: 'pending',
+					reason: ''
+				},
 				files: Array.isArray(data.files) ? data.files : [] // Optional for technical
 			};
 
@@ -92,7 +95,7 @@ const buildOrderData = (type, data) => {
 // Get all orders for a user
 exports.getUserOrders = async (req, res) => {
 	try {
-		const { userId } = req.params;
+		const userId = req.user._id;
 		const { status, type, page = 1, limit = 10 } = req.query;
 
 		// Build filter object
@@ -110,12 +113,30 @@ exports.getUserOrders = async (req, res) => {
 			.skip(skip)
 			.limit(parseInt(limit));
 
+		// Fetch review details for completed orders
+		const ordersWithReviews = await Promise.all(
+			orders.map(async (order) => {
+				const orderObj = order.toObject();
+
+				// Only fetch review data if order status is completed
+				if (order.status.state === 'completed') {
+					const review = await Review.findOne({ order: order._id })
+						.populate('writer', 'fullName email')
+						.populate('user', 'fullName email');
+
+					orderObj.review = review;
+				}
+
+				return orderObj;
+			})
+		);
+
 		const totalOrders = await Order.countDocuments(filter);
 
 		res.json({
 			success: true,
 			data: {
-				orders,
+				orders: ordersWithReviews,
 				pagination: {
 					currentPage: parseInt(page),
 					totalPages: Math.ceil(totalOrders / limit),
@@ -139,9 +160,9 @@ exports.getUserOrders = async (req, res) => {
 // Get single order by ID
 exports.getOrderById = async (req, res) => {
 	try {
-		const { orderId } = req.params;
+		const { id } = req.params;
 
-		const order = await Order.findById(orderId)
+		const order = await Order.findById(id)
 			.populate('user', 'fullName email')
 			.populate('writer', 'fullName email');
 
@@ -167,83 +188,163 @@ exports.getOrderById = async (req, res) => {
 	}
 };
 
-// Update order status
-exports.updateOrderStatus = async (req, res) => {
+// Update order by ID
+exports.updateOrderById = async (req, res) => {
 	try {
-		const { orderId } = req.params;
-		const { status } = req.body;
+		const userId = req.user._id;
+		const { id } = req.params;
 
-		const validStatuses = ['completed', 'pending', 'unassigned', 'cancel', 'expired'];
-		if (!validStatuses.includes(status)) {
+		// Find the order and check if it belongs to the user
+		const existingOrder = await Order.findOne({ _id: id, user: userId });
+
+		if (!existingOrder) {
+			return res.status(404).json({
+				success: false,
+				message: 'Order not found or you do not have permission to update this order'
+			});
+		}
+
+		// Get the order type from existing order (type cannot be changed)
+		const orderType = existingOrder.type;
+
+		// Build the update data based on the existing order type
+		const updateData = buildOrderData(orderType, {
+			...req.body,
+			user: userId // Ensure user remains the same
+		});
+
+		// Remove the type field from updates since it shouldn't change
+		delete updateData.type;
+
+		// Handle file updates
+		let finalFiles = existingOrder.files || [];
+
+		// If files field is provided in request body, it contains the remaining files after user deletions
+		if (req.body.files !== undefined) {
+			// Use the files from request body (user may have deleted some existing files)
+			finalFiles = Array.isArray(req.body.files) ? req.body.files : [];
+		}
+
+		// If new files are uploaded, upload them to cloudinary and append to existing files
+		if (req.files && req.files.files) {
+			try {
+				const newUploadedFiles = await uploadMultipleFiles(req.files.files, 'easyPro/files');
+				finalFiles = [...finalFiles, ...newUploadedFiles];
+			} catch (uploadError) {
+				return res.status(500).json({
+					success: false,
+					message: 'File upload failed'
+				});
+			}
+		}
+
+		// Update the files in updateData
+		updateData.files = finalFiles;
+
+		// Remove undefined values to avoid overwriting existing data with undefined
+		Object.keys(updateData).forEach(key => {
+			if (updateData[key] === undefined) {
+				delete updateData[key];
+			}
+		});
+
+		// If no valid updates are provided after processing
+		if (Object.keys(updateData).length === 0) {
 			return res.status(400).json({
 				success: false,
-				message: 'Invalid status value'
+				message: 'No valid fields provided for update'
 			});
 		}
 
-		const order = await Order.findByIdAndUpdate(
-			orderId,
-			{ status },
-			{ new: true }
-		).populate('user', 'fullName email').populate('writer', 'fullName email');
+		// Validate deadline if being updated
+		if (updateData.deadline) {
+			if (updateData.deadline < new Date()) {
+				return res.status(400).json({
+					success: false,
+					message: 'Deadline cannot be in the past'
+				});
+			}
+		}
 
-		if (!order) {
-			return res.status(404).json({
+		// Validate pageCount if being updated (for writing and editing types)
+		if (updateData.pageCount && updateData.pageCount < 1) {
+			return res.status(400).json({
 				success: false,
-				message: 'Order not found'
+				message: 'Page count must be at least 1'
 			});
 		}
 
-		res.json({
-			success: true,
-			message: 'Order status updated successfully',
-			data: order
-		});
+		// Type-specific validations
+		if (orderType === 'editing' && updateData.files && updateData.files.length === 0) {
+			return res.status(400).json({
+				success: false,
+				message: 'Files are required for editing orders'
+			});
+		}
 
-	} catch (error) {
-		console.error('Error updating order status:', error);
-		res.status(500).json({
-			success: false,
-			message: 'Internal server error',
-			error: error.message
-		});
-	}
-};
+		if (orderType === 'writing' && updateData.paperType && !updateData.paperType.trim()) {
+			return res.status(400).json({
+				success: false,
+				message: 'Paper type is required for writing orders'
+			});
+		}
 
-// Assign writer to order
-exports.assignWriter = async (req, res) => {
-	try {
-		const { orderId } = req.params;
-		const { writerId } = req.body;
+		// Handle nested status updates properly
+		if (updateData.status) {
+			const statusUpdate = {};
+			if (updateData.status.state) {
+				statusUpdate['status.state'] = updateData.status.state;
+			}
+			if (updateData.status.reason !== undefined) {
+				statusUpdate['status.reason'] = updateData.status.reason;
+			}
 
-		const order = await Order.findByIdAndUpdate(
-			orderId,
+			// Replace the nested status object with flattened updates
+			delete updateData.status;
+			Object.assign(updateData, statusUpdate);
+		}
+
+		// Update the order
+		const updatedOrder = await Order.findByIdAndUpdate(
+			id,
+			{ $set: updateData },
 			{
-				writer: writerId,
-				status: 'pending' // Automatically set to pending when writer is assigned
-			},
-			{ new: true }
-		).populate('user', 'fullName email').populate('writer', 'fullName email');
+				new: true,
+				runValidators: true
+			}
+		).populate('writer', 'name email')
+			.populate('user', 'name email');
 
-		if (!order) {
-			return res.status(404).json({
-				success: false,
-				message: 'Order not found'
-			});
-		}
-
-		res.json({
+		res.status(200).json({
 			success: true,
-			message: 'Writer assigned successfully',
-			data: order
+			message: 'Order updated successfully',
+			data: updatedOrder
 		});
 
 	} catch (error) {
-		console.error('Error assigning writer:', error);
+		console.error('Error updating order:', error);
+
+		// Handle validation errors
+		if (error.name === 'ValidationError') {
+			const validationErrors = Object.values(error.errors).map(err => err.message);
+			return res.status(400).json({
+				success: false,
+				message: 'Validation error',
+				errors: validationErrors
+			});
+		}
+
+		// Handle cast errors (invalid ObjectId)
+		if (error.name === 'CastError') {
+			return res.status(400).json({
+				success: false,
+				message: 'Invalid order ID format'
+			});
+		}
+
 		res.status(500).json({
 			success: false,
-			message: 'Internal server error',
-			error: error.message
+			message: 'Internal server error'
 		});
 	}
 };

@@ -25,11 +25,20 @@ const reviewSchema = new mongoose.Schema({
 		min: 1,
 		max: 5
 	},
-	other: {
-		type: Number,
-		required: true,
-		min: 1,
-		max: 5
+	other: [{
+		name: {
+			type: String,
+			trim: true
+		},
+		rating: {
+			type: Number,
+			min: 1,
+			max: 5
+		}
+	}],
+	description: {
+		type: String,
+		trim: true
 	},
 	writer: {
 		type: mongoose.Schema.Types.ObjectId,
@@ -41,19 +50,10 @@ const reviewSchema = new mongoose.Schema({
 		ref: 'User',
 		required: true
 	},
-	description: {
-		type: String,
-		trim: true
-	},
-	subject: {
-		type: String,
-		required: true,
-		trim: true
-	},
-	paperType: {
-		type: String,
-		required: true,
-		trim: true
+	order: {
+		type: mongoose.Schema.Types.ObjectId,
+		ref: 'Order',
+		required: true
 	}
 }, {
 	timestamps: true

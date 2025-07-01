@@ -1,6 +1,6 @@
 const express = require('express');
 const writerController = require('../controllers/writerControllers');
-const { protectAdmin } = require('../middleware/auth');
+const { protectAdmin, protectBoth } = require('../middleware/auth');
 const multer = require('multer');
 
 const router = express.Router();
@@ -11,11 +11,11 @@ const upload = multer({ storage });
 const uploadProfileImage = upload.single('profilePic');
 
 router.route('/')
-	.get(protectAdmin, writerController.getAllWriters)
+	.get(protectBoth, writerController.getAllWriters)
 	.post([protectAdmin, uploadProfileImage], writerController.createWriter);
 
 router.route('/:id')
-	.get(protectAdmin, writerController.getWriterById)
+	.get(protectBoth, writerController.getWriterById)
 	.put([protectAdmin, uploadProfileImage], writerController.updateWriter)
 	.delete(protectAdmin, writerController.deleteWriter);
 	

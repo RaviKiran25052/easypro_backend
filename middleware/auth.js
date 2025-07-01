@@ -1,42 +1,40 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const protect = (role = 'user') => async (req, res, next) => {
-	let token;
+const protect = (roles = ['user']) => async (req, res, next) => {
+	try {
+		const authHeader = req.headers.authorization;
 
-	if (
-		req.headers.authorization &&
-		req.headers.authorization.startsWith('Bearer')
-	) {
-		try {
-			token = req.headers.authorization.split(' ')[1];
-			const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-			const user = await User.findById(decoded.userId).select('-password');
-			if (!user) {
-				res.status(404);
-				throw new Error('User not found');
-			}
-			if (role === 'admin') {
-				if (user.role !== 'admin') {
-					res.status(403);
-					throw new Error('Not authorized as an admin');
-				}
-			}
-			req.user = user;
-			next();
-		} catch (error) {
-			console.error(error);
-			res.status(401);
-			throw new Error('Not authorized, token failed');
+		if (!authHeader || !authHeader.startsWith('Bearer ')) {
+			return res.status(401).json({ message: 'Not authorized, no token' });
 		}
-	} else {
-		res.status(401);
-		throw new Error('Not authorized, no token');
+
+		const token = authHeader.split(' ')[1];
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+		const user = await User.findById(decoded.userId).select('-password');
+		if (!user) {
+			return res.status(401).json({ message: 'User not found' });
+		}
+
+		// Attach user to request
+		req.user = user;
+
+		// Check if user's role is included in the allowed roles
+		if (!roles.includes(user.role)) {
+			return res.status(403).json({ message: 'Forbidden: insufficient role' });
+		}
+
+		next();
+
+	} catch (error) {
+		console.error('Auth error:', error.message);
+		res.status(401).json({ message: 'Not authorized, token failed' });
 	}
 };
 
 module.exports = {
-	protectUser: protect('user'),
-	protectAdmin: protect('admin'),
+	protectUser: protect(['user']),
+	protectAdmin: protect(['admin']),
+	protectBoth: protect(['user', 'admin'])
 };

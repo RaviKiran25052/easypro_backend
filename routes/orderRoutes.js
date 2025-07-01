@@ -18,7 +18,6 @@ router.route('/')
 
 router.route('/:id')
 	.get(protectUser, orderController.getOrderById)
-// .put(protectUser, orderController.updateOrder)
-// .delete(protectUser, orderController.deleteOrder);
+	.patch([protectUser, uploadFiles], orderController.updateOrderById);
 
 module.exports = router;
