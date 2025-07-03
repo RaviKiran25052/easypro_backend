@@ -78,5 +78,15 @@ orderSchema.methods.checkAndExpire = async function () {
 	return this;
 };
 
+orderSchema.pre('findByIdAndUpdate', function (next) {
+	const update = this.getUpdate();
+	if (update.deadline) {
+		const d = new Date(update.deadline);
+		update.deadline = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+		this.setUpdate(update);
+	}
+	next();
+});
+
 const Order = mongoose.model('Order', orderSchema);
 module.exports = Order;

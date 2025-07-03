@@ -63,16 +63,24 @@ const buildOrderData = (type, data) => {
 		case 'writing':
 			return {
 				...baseOrder,
-				paperType: data.paperType.trim(),
-				pageCount: parseInt(data.pageCount),
-				slides: data.slides ? parseInt(data.slides) : undefined
+				paperType: data.paperType?.trim(),
+				pageCount: parseInt(data?.pageCount) || 1,
+				slides: data.slides ? parseInt(data.slides) : undefined,
+				status: data.status || {
+					state: 'unassigned',
+					reason: ''
+				}
 			};
 
 		case 'editing':
 			return {
 				...baseOrder,
-				pageCount: parseInt(data.pageCount),
-				files: data.files // Required for editing
+				pageCount: parseInt(data?.pageCount) || 1,
+				files: data?.files,
+				status: data.status || {
+					state: 'unassigned',
+					reason: ''
+				}
 			};
 
 		case 'technical':
@@ -196,7 +204,7 @@ exports.updateOrderById = async (req, res) => {
 	try {
 		const userId = req.user._id;
 		const { id } = req.params;
-
+		
 		// Find the order and check if it belongs to the user
 		const existingOrder = await Order.findOne({ _id: id, user: userId });
 
@@ -295,6 +303,7 @@ exports.updateOrderById = async (req, res) => {
 		// Handle nested status updates properly
 		if (updateData.status) {
 			const statusUpdate = {};
+			
 			if (updateData.status.state) {
 				statusUpdate['status.state'] = updateData.status.state;
 			}
