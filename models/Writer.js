@@ -72,6 +72,10 @@ const writerSchema = new mongoose.Schema({
 		default: 5,
 		min: 1
 	},
+	ordersLeft : {
+		type: Number,
+		default: 5
+	},
 	availableOn: {
 		type: Date,
 		default: null
