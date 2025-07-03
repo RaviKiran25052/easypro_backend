@@ -57,7 +57,21 @@ const orderSchema = new mongoose.Schema({
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'User',
 		required: true
-	}
+	},
+	responses: [{
+		type: {
+			type: String,
+			enum: ['pdf', 'docx', 'txt', 'image', 'ppt'],
+		},
+		url: {
+			type: String,
+			trim: true
+		},
+		createdAt: {
+			type: Date,
+			default: Date.now
+		}
+	}],		
 }, {
 	timestamps: true
 });

@@ -16,7 +16,7 @@ router.route('/')
 
 router.route('/:id')
 	.get(protectBoth, writerController.getWriterById)
-	.put([protectAdmin, uploadProfileImage], writerController.updateWriter)
+	.patch([protectAdmin, uploadProfileImage], writerController.updateWriter)
 	.delete(protectAdmin, writerController.deleteWriter);
 	
 module.exports = router;

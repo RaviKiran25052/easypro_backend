@@ -156,13 +156,6 @@ exports.updateWriter = async (req, res) => {
 		const { id } = req.params;
 		const { fullName, email, skills, familiarWith, education, bio } = req.body;
 
-		if (!fullName || !email || !skills || !familiarWith || !education || !bio) {
-			return res.status(400).json({
-				success: false,
-				message: 'All fields are required'
-			});
-		}
-
 		const writer = await Writer.findById(id);
 		if (!writer) {
 			return res.status(404).json({
@@ -171,25 +164,46 @@ exports.updateWriter = async (req, res) => {
 			});
 		}
 
-		writer.fullName = fullName;
-		writer.email = email;
-		writer.skills = skills.map(skill => ({
-			skill: skill.skill,
-			experience: skill.experience
-		}));
-		writer.familiarWith = familiarWith.filter(item => item.trim() !== '');
-		writer.education = education.map(edu => ({
-			qualification: edu.qualification,
-			place: edu.place,
-			startYear: edu.startYear,
-			endYear: edu.endYear,
-			grade: edu.grade
-		}));
-		writer.bio = bio;
+		// Create update object with only provided fields
+		const updateData = {};
 
+		// Only update fields that are provided in the request
+		if (fullName !== undefined) updateData.fullName = fullName;
+		if (email !== undefined) updateData.email = email;
+		if (bio !== undefined) updateData.bio = bio;
+
+		// Handle array fields with proper validation
+		if (skills !== undefined) {
+			if (Array.isArray(skills)) {
+				updateData.skills = skills.map(skill => ({
+					skill: skill.skill,
+					experience: skill.experience
+				}));
+			}
+		}
+
+		if (familiarWith !== undefined) {
+			if (Array.isArray(familiarWith)) {
+				updateData.familiarWith = familiarWith.filter(item => item.trim() !== '');
+			}
+		}
+
+		if (education !== undefined) {
+			if (Array.isArray(education)) {
+				updateData.education = education.map(edu => ({
+					qualification: edu.qualification,
+					place: edu.place,
+					startYear: edu.startYear,
+					endYear: edu.endYear,
+					grade: edu.grade
+				}));
+			}
+		}
+
+		// Handle file upload if present
 		if (req.file) {
 			try {
-				writer.profilePic = await uploadToCloudinary(req.file, 'easyPro/images');
+				updateData.profilePic = await uploadToCloudinary(req.file, 'easyPro/images');
 			} catch (uploadError) {
 				return res.status(500).json({
 					success: false,
@@ -198,16 +212,50 @@ exports.updateWriter = async (req, res) => {
 			}
 		}
 
-		await writer.save();
+		// Update only if there are fields to update
+		if (Object.keys(updateData).length === 0) {
+			return res.status(400).json({
+				success: false,
+				message: 'No fields provided to update'
+			});
+		}
+
+		// Use findByIdAndUpdate with new option to return updated document
+		const updatedWriter = await Writer.findByIdAndUpdate(
+			id,
+			updateData,
+			{
+				new: true,
+				runValidators: true // Ensure schema validation runs
+			}
+		);
 
 		res.status(200).json({
 			success: true,
 			message: 'Writer updated successfully',
-			data: writer
+			data: updatedWriter
 		});
 
 	} catch (error) {
 		console.error('Error updating writer:', error);
+
+		// Handle validation errors
+		if (error.name === 'ValidationError') {
+			return res.status(400).json({
+				success: false,
+				message: 'Validation error',
+				errors: Object.values(error.errors).map(err => err.message)
+			});
+		}
+
+		// Handle duplicate key error (email uniqueness)
+		if (error.code === 11000) {
+			return res.status(400).json({
+				success: false,
+				message: 'Email already exists'
+			});
+		}
+
 		res.status(500).json({
 			success: false,
 			message: 'Internal server error'
