@@ -360,3 +360,75 @@ exports.updateOrderById = async (req, res) => {
 		});
 	}
 };
+
+exports.getAllOrders = async (req, res) => {
+	try {
+		const { status, type, page = 1, limit = 10 } = req.query;
+
+		// Build filter object
+		const filter = {};
+		if (status) filter['status.state'] = status;
+		if (type) filter.type = type;
+
+		// Calculate pagination
+		const skip = (page - 1) * limit;
+
+		const orders = await Order.find(filter)
+			.populate('user', 'fullName email')
+			.populate('writer', 'fullName email')
+			.sort({ createdAt: -1 })
+			.skip(skip)
+			.limit(parseInt(limit));
+
+		// Fetch review details for completed orders
+		const ordersWithReviews = await Promise.all(
+			orders.map(async (order) => {
+				await order.checkAndExpire();
+				const orderObj = order.toObject();
+
+				// Only fetch review data if order status is completed
+				if (order.status.state === 'completed') {
+					const review = await Review.findOne({ order: order._id })
+						.populate('writer', 'fullName email')
+						.populate('user', 'fullName email');
+
+					orderObj.review = review;
+				}
+
+				return orderObj;
+			})
+		);
+
+		const totalOrders = await Order.countDocuments(filter);
+
+		res.json({
+			success: true,
+			data: {
+				orders: ordersWithReviews,
+				pagination: {
+					currentPage: parseInt(page),
+					totalPages: Math.ceil(totalOrders / limit),
+					totalOrders,
+					hasNext: page * limit < totalOrders,
+					hasPrev: page > 1
+				}
+			}
+		});
+
+	} catch (error) {
+		console.error('Error fetching user orders:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Internal server error',
+			error: error.message
+		});
+	}
+}
+
+exports.assignWriter = async (req, res) => {
+
+}
+
+exports.submitResponse = async (req, res) => {
+
+}
