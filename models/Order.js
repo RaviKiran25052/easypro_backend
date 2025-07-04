@@ -59,9 +59,9 @@ const orderSchema = new mongoose.Schema({
 		required: true
 	},
 	responses: [{
-		type: {
+		title: {
 			type: String,
-			enum: ['pdf', 'docx', 'txt', 'image', 'ppt'],
+			trim: true
 		},
 		url: {
 			type: String,

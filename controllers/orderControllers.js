@@ -1,6 +1,7 @@
 const { uploadMultipleFiles } = require('../config/cloudinary');
 const Order = require('../models/Order');
 const Review = require('../models/Review');
+const Writer = require('../models/Writer');
 
 exports.createOrder = async (req, res) => {
 	try {
@@ -183,7 +184,7 @@ exports.getOrderById = async (req, res) => {
 		}
 
 		await order.checkAndExpire();
-		
+
 		res.json({
 			success: true,
 			data: order
@@ -204,7 +205,7 @@ exports.updateOrderById = async (req, res) => {
 	try {
 		const userId = req.user._id;
 		const { id } = req.params;
-		
+
 		// Find the order and check if it belongs to the user
 		const existingOrder = await Order.findOne({ _id: id, user: userId });
 
@@ -303,7 +304,7 @@ exports.updateOrderById = async (req, res) => {
 		// Handle nested status updates properly
 		if (updateData.status) {
 			const statusUpdate = {};
-			
+
 			if (updateData.status.state) {
 				statusUpdate['status.state'] = updateData.status.state;
 			}
@@ -426,9 +427,174 @@ exports.getAllOrders = async (req, res) => {
 }
 
 exports.assignWriter = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { writerId, deadline } = req.body;
 
-}
+		// Validate input
+		if (!writerId || !deadline) {
+			return res.status(400).json({
+				success: false,
+				message: 'Writer ID and deadline are required'
+			});
+		}
+
+		// Parse deadline
+		const orderDeadline = new Date(deadline);
+		if (isNaN(orderDeadline.getTime())) {
+			return res.status(400).json({
+				success: false,
+				message: 'Invalid deadline format'
+			});
+		}
+
+		// Find the order
+		const order = await Order.findById(id);
+		if (!order) {
+			return res.status(404).json({
+				success: false,
+				message: 'Order not found'
+			});
+		}
+
+		// Check if order can be assigned
+		if (!['unassigned', 'pending'].includes(order.status.state)) {
+			return res.status(400).json({
+				success: false,
+				message: `Cannot assign writer to ${order.status.state} order`
+			});
+		}
+
+		// Find the writer
+		const writer = await Writer.findById(writerId);
+		if (!writer) {
+			return res.status(404).json({
+				success: false,
+				message: 'Writer not found'
+			});
+		}
+
+		// Check writer availability
+		let availabilityMessage = '';
+		let canAssign = true;
+
+		// Check order capacity
+		if (writer.ordersLeft <= 0) {
+			canAssign = false;
+			availabilityMessage = 'Writer has no available slots';
+		}
+
+		// Check availability date if set
+		if (writer.availableOn) {
+			const availableDate = new Date(writer.availableOn);
+			if (availableDate > orderDeadline) {
+				canAssign = false;
+				availabilityMessage = `Writer will be available on ${availableDate.toLocaleDateString()} - after order deadline`;
+			}
+		}
+
+		if (!canAssign) {
+			return res.status(400).json({
+				success: false,
+				message: 'Cannot assign writer',
+				details: availabilityMessage,
+				writerStatus: {
+					ordersLeft: writer.ordersLeft,
+					availableOn: writer.availableOn
+				}
+			});
+		}
+
+		// Update the order
+		order.writer = writerId;
+		order.status.state = 'assigned';
+		order.status.reason = `Assigned by admin on ${new Date().toLocaleDateString()}`;
+
+		// Update writer's orders left count
+		writer.ordersLeft = Math.max(0, writer.ordersLeft - 1);
+
+		// Save changes
+		await Promise.all([order.save(), writer.save()]);
+
+		// Populate writer details in the response
+		const updatedOrder = await Order.findById(id)
+			.populate('writer', 'fullName email rating ordersLeft availableOn');
+
+		res.json({
+			success: true,
+			message: 'Writer assigned successfully',
+			data: updatedOrder
+		});
+
+	} catch (error) {
+		console.error('Error assigning writer:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Internal server error',
+			error: error.message
+		});
+	}
+};
 
 exports.submitResponse = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const titles  = req.body?.titles ?.split(','); // Array of file titles 
+		const files = req.files?.files;
 
-}
+		// Validate inputs
+		if (!files || !titles  || files.length !== titles .length) {
+			return res.status(400).json({
+				success: false,
+				message: 'Files and types arrays must be provided and have matching lengths'
+			});
+		}
+
+		// Find the order
+		const order = await Order.findById(id);
+		if (!order) {
+			return res.status(404).json({
+				success: false,
+				message: 'Order not found'
+			});
+		}
+
+		// Check if order can receive responses
+		if (!['assigned', 'pending'].includes(order.status.state)) {
+			return res.status(400).json({
+				success: false,
+				message: `Cannot add responses to ${order.status.state} order`
+			});
+		}
+
+		const cloudinaryResults = await uploadMultipleFiles(files, 'easyPro/responses');
+
+		// Create response objects
+		const newResponses = cloudinaryResults.map((link, index) => ({
+			title: titles[index],
+			url: link
+		}));
+
+		// Update order with new responses
+		order.responses = [...order.responses, ...newResponses];
+		await order.save();
+
+		res.status(200).json({
+			success: true,
+			message: 'Files uploaded successfully',
+			data: {
+				responses: newResponses,
+				orderId: order._id,
+				status: order.status.state
+			}
+		});
+
+	} catch (error) {
+		console.error('Error uploading order responses:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Failed to upload files',
+			error: error.message
+		});
+	}
+};
