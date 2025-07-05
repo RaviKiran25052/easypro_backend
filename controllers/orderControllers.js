@@ -174,7 +174,7 @@ exports.getOrderById = async (req, res) => {
 
 		const order = await Order.findById(id)
 			.populate('user', 'fullName email')
-			.populate('writer', 'fullName email');
+			.populate('writer', 'fullName email profilePic skills rating ordersLeft availableOn');
 
 		if (!order) {
 			return res.status(404).json({
@@ -185,9 +185,19 @@ exports.getOrderById = async (req, res) => {
 
 		await order.checkAndExpire();
 
+		let orderObj = order.toObject();
+		// Fetch review details for completed orders
+		if (order.status.state === 'completed') {
+			const review = await Review.findOne({ order: order._id })
+				.populate('writer', 'fullName email')
+				.populate('user', 'fullName email');
+
+			orderObj.review = review || null;;
+		}
+
 		res.json({
 			success: true,
-			data: order
+			data: orderObj
 		});
 
 	} catch (error) {
@@ -643,7 +653,7 @@ exports.completeOrder = async (req, res) => {
 		if (writer.ordersLeft === writer.maxOrders) {
 			writer.availableOn = null; // Make writer immediately available
 		}
-		
+
 		await Promise.all([order.save(), writer.save()]);
 
 		// Get updated order with populated writer

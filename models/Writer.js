@@ -62,17 +62,23 @@ const writerSchema = new mongoose.Schema({
 		trim: true
 	},
 	rating: {
-		type: Number,
-		default: 0,
-		min: 0,
-		max: 5
+		avgRating: {
+			type: Number,
+			default: 0,
+			min: 0,
+			max: 5
+		},
+		count: {
+			type: Number,
+			default: 0,
+		}
 	},
 	maxOrders: {
 		type: Number,
 		default: 5,
 		min: 1
 	},
-	ordersLeft : {
+	ordersLeft: {
 		type: Number,
 		default: 5
 	},

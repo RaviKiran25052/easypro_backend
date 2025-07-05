@@ -70,6 +70,40 @@ exports.createReview = async (req, res) => {
 
 		const savedReview = await newReview.save();
 
+		// Calculate new review's average
+		let totalSum = followingInstructions + grammar + responseSpeed + formatting;
+		let count = 4;
+
+		if (Array.isArray(other)) {
+			other.forEach(item => {
+				if (item.rating) {
+					totalSum += item.rating;
+					count += 1;
+				}
+			});
+		}
+
+		const newReviewAvg = totalSum / count;
+
+		// Update writer's avg rating and count
+		const writerDoc = await Writer.findById(writer);
+		if (!writerDoc) {
+			return res.status(404).json({
+				success: false,
+				message: 'Writer not found'
+			});
+		}
+
+		const oldAvg = writerDoc.rating.avgRating;
+		const oldCount = writerDoc.rating.count;
+
+		const updatedAvg = ((oldAvg * oldCount) + newReviewAvg) / (oldCount + 1);
+
+		writerDoc.rating.avgRating = parseFloat(updatedAvg.toFixed(2));
+		writerDoc.rating.count = oldCount + 1;
+
+		await writerDoc.save();
+
 		res.status(201).json({
 			success: true,
 			message: 'Review created successfully',
