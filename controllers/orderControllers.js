@@ -539,11 +539,11 @@ exports.assignWriter = async (req, res) => {
 exports.submitResponse = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const titles  = req.body?.titles ?.split(','); // Array of file titles 
+		const titles = req.body?.titles?.split(','); // Array of file titles 
 		const files = req.files?.files;
 
 		// Validate inputs
-		if (!files || !titles  || files.length !== titles .length) {
+		if (!files || !titles || files.length !== titles.length) {
 			return res.status(400).json({
 				success: false,
 				message: 'Files and types arrays must be provided and have matching lengths'
@@ -594,6 +594,73 @@ exports.submitResponse = async (req, res) => {
 		res.status(500).json({
 			success: false,
 			message: 'Failed to upload files',
+			error: error.message
+		});
+	}
+};
+
+exports.completeOrder = async (req, res) => {
+	try {
+		const { id } = req.params;
+
+		// Find and validate the order
+		const order = await Order.findById(id).populate('writer');
+		if (!order) {
+			return res.status(404).json({
+				success: false,
+				message: 'Order not found'
+			});
+		}
+
+		// Check if order can be completed
+		if (!['unassigned', 'pending'].includes(order.status.state)) {
+			return res.status(400).json({
+				success: false,
+				message: `Cannot complete order with status: ${order.status.state}`
+			});
+		}
+
+		// Verify writer exists
+		if (!order.writer) {
+			return res.status(400).json({
+				success: false,
+				message: 'No writer assigned to this order'
+			});
+		}
+
+		// Update order status
+		order.status = {
+			state: 'completed',
+			reason: `Completed by ${order.writer?.fullName}`,
+			completedAt: new Date()
+		};
+
+		// Update writer's orders
+		const writer = await Writer.findById(order.writer._id);
+		writer.ordersLeft = Math.min(writer.ordersLeft + 1, writer.maxOrders);
+
+		// If writer has reached max capacity (last order completed)
+		if (writer.ordersLeft === writer.maxOrders) {
+			writer.availableOn = null; // Make writer immediately available
+		}
+		
+		await Promise.all([order.save(), writer.save()]);
+
+		// Get updated order with populated writer
+		const updatedOrder = await Order.findById(id)
+			.populate('writer', 'fullName email ordersLeft maxOrders availableOn');
+
+		res.json({
+			success: true,
+			message: 'Order marked as completed',
+			data: updatedOrder
+		});
+
+	} catch (error) {
+		console.error('Error completing order:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Internal server error',
 			error: error.message
 		});
 	}

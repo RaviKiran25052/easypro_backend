@@ -24,6 +24,6 @@ router.route('/:id')
 router.get('/admin/all', protectAdmin, orderController.getAllOrders)
 router.patch('/admin/:id/assign', protectAdmin, orderController.assignWriter)
 router.patch('/admin/:id/response', [protectAdmin, uploadFiles], orderController.submitResponse)
-router.patch('/admin/:id/submit', protectAdmin, orderController.assignWriter)
+router.patch('/admin/:id/submit', protectAdmin, orderController.completeOrder)
 
 module.exports = router;
