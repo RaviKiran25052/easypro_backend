@@ -30,7 +30,6 @@ exports.createOrder = async (req, res) => {
 		// Create and save order
 		const order = new Order(orderData);
 		if (order.type === 'technical') {
-			console.log(1);
 			const writer = await Writer.findById(order.writer);
 
 			if (!writer) {

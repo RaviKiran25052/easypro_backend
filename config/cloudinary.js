@@ -12,7 +12,13 @@ const uploadToCloudinary = (file, folder) => {
 	const fileBuffer = file.buffer;
 	return new Promise((resolve, reject) => {
 		const uploadStream = cloudinary.uploader.upload_stream(
-			{ resource_type: 'auto', folder },
+			{
+				resource_type: 'auto',
+				folder,
+				context: `filename=${file.originalname}`, // Store original name in metadata
+				use_filename: true,       // Use original filename as part of Cloudinary's ID
+				unique_filename: false    // Don't add unique suffixes
+			},
 			(error, result) => {
 				if (error) reject(error);
 				else resolve(result.secure_url);
