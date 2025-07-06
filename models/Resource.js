@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
 const resourceSchema = new mongoose.Schema({
-	link: {
+	title: {
 		type: String,
 		required: true,
 		trim: true
 	},
-	title: {
+	subject: {
 		type: String,
 		required: true,
 		trim: true
@@ -16,9 +16,13 @@ const resourceSchema = new mongoose.Schema({
 		required: true,
 		trim: true
 	},
+	url: {
+		type: String,
+		required: true,
+		trim: true
+	},
 	type: {
 		type: String,
-		enum: ['image', 'video', 'pdf', 'presentation', 'other'],
 		required: true,
 		trim: true
 	},
@@ -26,7 +30,11 @@ const resourceSchema = new mongoose.Schema({
 		type: String,
 		trim: true
 	}],
-	writer: {
+	views: {
+		type: Number,
+		default: 0
+	},
+	author: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'Writer',
 		required: true

@@ -1,5 +1,6 @@
 const Writer = require('../models/Writer');
 const { uploadToCloudinary } = require('../config/cloudinary');
+const Review = require('../models/Review');
 
 exports.getAllWriters = async (req, res) => {
 	try {
@@ -78,9 +79,16 @@ exports.getWriterById = async (req, res) => {
 			message: 'Writer not found'
 		});
 	}
+
+	const reviews = await Review.find({ writer: id })
+		.populate('user', 'userName email')
+		.populate('order', 'type paperType subject ')
+		.sort({ createdAt: -1 });
+
 	res.status(200).json({
 		success: true,
-		data: writer
+		writer,
+		reviews
 	});
 }
 

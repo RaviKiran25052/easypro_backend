@@ -158,7 +158,7 @@ exports.getUserOrders = async (req, res) => {
 
 		// Build filter object
 		const filter = { user: userId };
-		if (status) filter.status = status;
+		if (status) filter['status.state'] = status;
 		if (type) filter.type = type;
 
 		// Calculate pagination
