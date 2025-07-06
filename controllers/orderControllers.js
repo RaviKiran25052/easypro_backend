@@ -29,6 +29,56 @@ exports.createOrder = async (req, res) => {
 		}
 		// Create and save order
 		const order = new Order(orderData);
+		if (order.type === 'technical') {
+			console.log(1);
+			const writer = await Writer.findById(order.writer);
+
+			if (!writer) {
+				return res.status(404).json({
+					success: false,
+					message: 'Writer not found'
+				});
+			}
+
+			// Check writer availability
+			let availabilityMessage = '';
+			let canAssign = true;
+
+			// Check order capacity
+			if (writer.ordersLeft <= 0) {
+				canAssign = false;
+				availabilityMessage = 'Writer has no available slots';
+			}
+
+			// Check availability date if set
+			if (writer.availableOn) {
+				const availableDate = new Date(writer.availableOn);
+				if (availableDate > order.deadline) {
+					canAssign = false;
+					availabilityMessage = `Writer will be available on ${availableDate.toLocaleDateString()} - after order deadline`;
+				}
+			}
+
+			if (!canAssign) {
+				return res.status(400).json({
+					success: false,
+					message: 'Cannot assign writer',
+					details: availabilityMessage,
+					writerStatus: {
+						ordersLeft: writer.ordersLeft,
+						availableOn: writer.availableOn
+					}
+				});
+			}
+			
+			// Update writer's orders left count
+			const ordersLeft = Math.max(0, writer.ordersLeft - 1);
+			writer.ordersLeft = ordersLeft;
+			if (ordersLeft === 0) {
+				writer.availableOn = order.deadline;
+			}
+			await writer.save();
+		}
 		await order.save();
 
 		// Populate user reference
@@ -297,6 +347,55 @@ exports.updateOrderById = async (req, res) => {
 		}
 
 		// Type-specific validations
+		if (orderType === 'technical') {
+			const writer = await Writer.findById(existingOrder.writer);
+
+			if (!writer) {
+				return res.status(404).json({
+					success: false,
+					message: 'Writer not found'
+				});
+			}
+
+			// Check writer availability
+			let availabilityMessage = '';
+			let canAssign = true;
+
+			// Check order capacity
+			if (writer.ordersLeft <= 0) {
+				canAssign = false;
+				availabilityMessage = 'Writer has no available slots';
+			}
+
+			// Check availability date if set
+			if (writer.availableOn) {
+				const availableDate = new Date(writer.availableOn);
+				if (availableDate > existingOrder.deadline) {
+					canAssign = false;
+					availabilityMessage = `Writer will be available on ${availableDate.toLocaleDateString()} - after order deadline`;
+				}
+			}
+
+			if (!canAssign) {
+				return res.status(400).json({
+					success: false,
+					message: 'Cannot assign writer',
+					details: availabilityMessage,
+					writerStatus: {
+						ordersLeft: writer.ordersLeft,
+						availableOn: writer.availableOn
+					}
+				});
+			}
+			
+			// Update writer's orders left count
+			const ordersLeft = Math.max(0, writer.ordersLeft - 1);
+			writer.ordersLeft = ordersLeft;
+			if (ordersLeft === 0) {
+				writer.availableOn = existingOrder.deadline;
+			}
+			await writer.save();
+		}
 		if (orderType === 'editing' && updateData.files && updateData.files.length === 0) {
 			return res.status(400).json({
 				success: false,
@@ -439,22 +538,13 @@ exports.getAllOrders = async (req, res) => {
 exports.assignWriter = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const { writerId, deadline } = req.body;
+		const { writerId } = req.body;
 
 		// Validate input
-		if (!writerId || !deadline) {
+		if (!writerId) {
 			return res.status(400).json({
 				success: false,
-				message: 'Writer ID and deadline are required'
-			});
-		}
-
-		// Parse deadline
-		const orderDeadline = new Date(deadline);
-		if (isNaN(orderDeadline.getTime())) {
-			return res.status(400).json({
-				success: false,
-				message: 'Invalid deadline format'
+				message: 'Writer ID is required'
 			});
 		}
 
@@ -497,7 +587,7 @@ exports.assignWriter = async (req, res) => {
 		// Check availability date if set
 		if (writer.availableOn) {
 			const availableDate = new Date(writer.availableOn);
-			if (availableDate > orderDeadline) {
+			if (availableDate > order.deadline) {
 				canAssign = false;
 				availabilityMessage = `Writer will be available on ${availableDate.toLocaleDateString()} - after order deadline`;
 			}
@@ -521,7 +611,11 @@ exports.assignWriter = async (req, res) => {
 		order.status.reason = `Assigned by admin on ${new Date().toLocaleDateString()}`;
 
 		// Update writer's orders left count
-		writer.ordersLeft = Math.max(0, writer.ordersLeft - 1);
+		const ordersLeft = Math.max(0, writer.ordersLeft - 1);
+		writer.ordersLeft = ordersLeft;
+		if (ordersLeft === 0) {
+			writer.availableOn = order.deadline;
+		}
 
 		// Save changes
 		await Promise.all([order.save(), writer.save()]);
@@ -623,7 +717,7 @@ exports.completeOrder = async (req, res) => {
 		}
 
 		// Check if order can be completed
-		if (!['unassigned', 'pending'].includes(order.status.state)) {
+		if (!['assigned', 'pending'].includes(order.status.state)) {
 			return res.status(400).json({
 				success: false,
 				message: `Cannot complete order with status: ${order.status.state}`
