@@ -69,7 +69,7 @@ exports.createOrder = async (req, res) => {
 					}
 				});
 			}
-			
+
 			// Update writer's orders left count
 			const ordersLeft = Math.max(0, writer.ordersLeft - 1);
 			writer.ordersLeft = ordersLeft;
@@ -346,7 +346,7 @@ exports.updateOrderById = async (req, res) => {
 		}
 
 		// Type-specific validations
-		if (orderType === 'technical' && !req.body.status) {			
+		if (orderType === 'technical' && req.body?.status?.state === 'cancelled') {
 			const writer = await Writer.findById(existingOrder.writer);
 
 			if (!writer) {
@@ -356,43 +356,11 @@ exports.updateOrderById = async (req, res) => {
 				});
 			}
 
-			// Check writer availability
-			let availabilityMessage = '';
-			let canAssign = true;
+			// Reverse the previous assignment logic
+			writer.ordersLeft += 1;  // Increment the available slots
+			// reset availableOn
+			writer.availableOn = null;
 
-			// Check order capacity
-			if (writer.ordersLeft <= 0) {
-				canAssign = false;
-				availabilityMessage = 'Writer has no available slots';
-			}
-
-			// Check availability date if set
-			if (writer.availableOn) {
-				const availableDate = new Date(writer.availableOn);
-				if (availableDate > existingOrder.deadline) {
-					canAssign = false;
-					availabilityMessage = `Writer will be available on ${availableDate.toLocaleDateString()} - after order deadline`;
-				}
-			}
-
-			if (!canAssign) {
-				return res.status(400).json({
-					success: false,
-					message: 'Cannot assign writer',
-					details: availabilityMessage,
-					writerStatus: {
-						ordersLeft: writer.ordersLeft,
-						availableOn: writer.availableOn
-					}
-				});
-			}
-			
-			// Update writer's orders left count
-			const ordersLeft = Math.max(0, writer.ordersLeft - 1);
-			writer.ordersLeft = ordersLeft;
-			if (ordersLeft === 0) {
-				writer.availableOn = existingOrder.deadline;
-			}
 			await writer.save();
 		}
 		if (orderType === 'editing' && updateData.files && updateData.files.length === 0) {
