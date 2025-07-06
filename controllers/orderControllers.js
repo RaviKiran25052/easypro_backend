@@ -346,7 +346,7 @@ exports.updateOrderById = async (req, res) => {
 		}
 
 		// Type-specific validations
-		if (orderType === 'technical') {
+		if (orderType === 'technical' && !req.body.status) {			
 			const writer = await Writer.findById(existingOrder.writer);
 
 			if (!writer) {
