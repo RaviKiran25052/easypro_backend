@@ -16,7 +16,7 @@ router.route('/')
 
 router.route('/:id')
 	.get(resourceController.getResourceById)
-	.patch(resourceController.updateResourceById)
-	.delete(resourceController.deleteResourceById)
+	.patch([protectAdmin, uploadResource], resourceController.updateResourceById)
+	.delete([protectAdmin, uploadResource], resourceController.deleteResourceById)
 
 module.exports = router;

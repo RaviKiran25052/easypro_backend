@@ -172,5 +172,31 @@ exports.updateResourceById = async (req, res) => {
 };
 
 exports.deleteResourceById = async (req, res) => {
+	try {
+		const { id } = req.params;
 
-}
+		// Verify the resource exists
+		const resource = await Resource.findById(id);
+		if (!resource) {
+			return res.status(404).json({
+				success: false,
+				message: 'Resource not found'
+			});
+		}
+
+		// Delete the resource
+		await Resource.findByIdAndDelete(id);
+
+		res.status(200).json({
+			success: true,
+			message: 'Resource deleted successfully'
+		});
+
+	} catch (error) {
+		console.error('Error deleting resource:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Server error while deleting resource'
+		});
+	}
+};
