@@ -7,6 +7,7 @@ const writerRouter = require('./routes/writerRoutes.js');
 const orderRouter = require('./routes/orderRoutes.js');
 const reviewRouter = require('./routes/reviewRoutes.js');
 const resourceRouter = require('./routes/resourceRoutes.js');
+const plagiarismRouter = require('./routes/plagiarismRoutes.js');
 const createAdminIfNotExists = require('./scripts/adminSeed.js');
 
 require('dotenv').config();
@@ -26,6 +27,7 @@ app.use("/easyPro/writer", writerRouter);
 app.use("/easyPro/order", orderRouter);
 app.use("/easyPro/review", reviewRouter);
 app.use("/easyPro/resource", resourceRouter);
+app.use("/easyPro/plagiarism", plagiarismRouter);
 
 const PORT = process.env.PORT || 5555;
 
