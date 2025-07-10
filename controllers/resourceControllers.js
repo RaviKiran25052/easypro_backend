@@ -1,3 +1,4 @@
+const { default: mongoose } = require('mongoose');
 const { uploadToCloudinary } = require('../config/cloudinary');
 const Resource = require('../models/Resource');
 const Writer = require('../models/Writer');
@@ -122,8 +123,50 @@ exports.createResource = async (req, res) => {
 };
 
 exports.getResourceById = async (req, res) => {
+	try {
+		const { id } = req.params;
 
-}
+		// Validate if the ID is a valid MongoDB ObjectId
+		if (!mongoose.Types.ObjectId.isValid(id)) {
+			return res.status(400).json({
+				success: false,
+				message: 'Invalid resource ID format'
+			});
+		}
+
+		// Find the resource by ID and populate the author details
+		const resource = await Resource.findById(id)
+			.populate('author', 'fullName email profilePic skills familiarWith education bio rating')
+			.exec();
+
+		// Check if resource exists
+		if (!resource) {
+			return res.status(404).json({
+				success: false,
+				message: 'Resource not found'
+			});
+		}
+
+		// Increment views count
+		resource.views += 1;
+		await resource.save();
+
+		// Send successful response
+		res.status(200).json({
+			success: true,
+			data: resource,
+			message: 'Resource fetched successfully'
+		});
+
+	} catch (error) {
+		console.error('Error fetching resource:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Internal server error',
+			error: process.env.NODE_ENV === 'development' ? error.message : undefined
+		});
+	}
+};
 
 exports.updateResourceById = async (req, res) => {
 	try {
